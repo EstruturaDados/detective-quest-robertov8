@@ -236,16 +236,230 @@ Pista* verificarPistaNaSala(const char* nomeSala, Pista* pistasColetadas) {
 // 🧠 NÍVEL MESTRE: RELACIONAMENTO DE PISTAS COM SUSPEITOS VIA HASH
 // ============================================================================
 
-// - Crie uma struct Suspeito contendo nome e lista de pistas associadas.
-// - Crie uma tabela hash (ex: array de ponteiros para listas encadeadas).
-// - A chave pode ser o nome do suspeito ou derivada das pistas.
-// - Implemente uma função inserirHash(pista, suspeito) para registrar relações.
-// - Crie uma função para mostrar todos os suspeitos e suas respectivas pistas.
-// - Adicione um contador para saber qual suspeito foi mais citado.
-// - Exiba ao final o "suspeito mais provável" baseado nas pistas coletadas.
-// - Para hashing simples, pode usar soma dos valores ASCII do nome ou primeira letra.
-// - Em caso de colisão, use lista encadeada para tratar.
-// - Modularize com funções como inicializarHash(), buscarSuspeito(), listarAssociacoes().
+#define TAMANHO_HASH 10
+
+// Estrutura para armazenar informações de um suspeito
+typedef struct Suspeito {
+    char nome[50];
+    int contadorPistas;
+    struct Suspeito* proximo;  // Para encadeamento (colisões)
+} Suspeito;
+
+// Estrutura para relacionar pista com suspeito
+typedef struct RelacaoPistaSuspeito {
+    char pista[100];
+    char suspeito[50];
+    struct RelacaoPistaSuspeito* proximo;
+} RelacaoPistaSuspeito;
+
+// Tabela hash de suspeitos
+typedef struct {
+    Suspeito* tabela[TAMANHO_HASH];
+    RelacaoPistaSuspeito* relacoes;  // Lista de todas as relações pista-suspeito
+} TabelaHash;
+
+// ============================================================================
+// PROTÓTIPOS DE FUNÇÕES - NÍVEL MESTRE
+// ============================================================================
+
+TabelaHash* inicializarHash();
+int funcaoHash(const char* chave);
+void inserirSuspeito(TabelaHash* hash, const char* nomeSuspeito);
+void inserirRelacaoPistaSuspeito(TabelaHash* hash, const char* pista, const char* suspeito);
+void incrementarContadorSuspeito(TabelaHash* hash, const char* nomeSuspeito);
+void listarAssociacoes(TabelaHash* hash);
+void encontrarSuspeitoMaisCitado(TabelaHash* hash);
+void liberarHash(TabelaHash* hash);
+void inicializarRelacoesPistas(TabelaHash* hash);
+
+// ============================================================================
+// IMPLEMENTAÇÃO DAS FUNÇÕES - NÍVEL MESTRE
+// ============================================================================
+
+// Função de inicialização da tabela hash
+TabelaHash* inicializarHash() {
+    TabelaHash* hash = (TabelaHash*)malloc(sizeof(TabelaHash));
+    if (hash == NULL) {
+        printf("Erro ao alocar memória para tabela hash!\n");
+        exit(1);
+    }
+    
+    for (int i = 0; i < TAMANHO_HASH; i++) {
+        hash->tabela[i] = NULL;
+    }
+    hash->relacoes = NULL;
+    
+    return hash;
+}
+
+// Função hash simples baseada na soma dos valores ASCII
+int funcaoHash(const char* chave) {
+    int soma = 0;
+    for (int i = 0; chave[i] != '\0'; i++) {
+        soma += (unsigned char)chave[i];
+    }
+    return soma % TAMANHO_HASH;
+}
+
+// Função para inserir ou atualizar um suspeito na tabela hash
+void inserirSuspeito(TabelaHash* hash, const char* nomeSuspeito) {
+    int indice = funcaoHash(nomeSuspeito);
+    
+    // Verificar se o suspeito já existe na lista encadeada
+    Suspeito* atual = hash->tabela[indice];
+    while (atual != NULL) {
+        if (strcmp(atual->nome, nomeSuspeito) == 0) {
+            return;  // Suspeito já existe
+        }
+        atual = atual->proximo;
+    }
+    
+    // Criar novo suspeito
+    Suspeito* novoSuspeito = (Suspeito*)malloc(sizeof(Suspeito));
+    if (novoSuspeito == NULL) {
+        printf("Erro ao alocar memória para suspeito!\n");
+        exit(1);
+    }
+    
+    strcpy(novoSuspeito->nome, nomeSuspeito);
+    novoSuspeito->contadorPistas = 0;
+    novoSuspeito->proximo = hash->tabela[indice];
+    hash->tabela[indice] = novoSuspeito;
+}
+
+// Função para incrementar o contador de pistas de um suspeito
+void incrementarContadorSuspeito(TabelaHash* hash, const char* nomeSuspeito) {
+    int indice = funcaoHash(nomeSuspeito);
+    
+    Suspeito* atual = hash->tabela[indice];
+    while (atual != NULL) {
+        if (strcmp(atual->nome, nomeSuspeito) == 0) {
+            atual->contadorPistas++;
+            return;
+        }
+        atual = atual->proximo;
+    }
+}
+
+// Função para inserir uma relação pista-suspeito
+void inserirRelacaoPistaSuspeito(TabelaHash* hash, const char* pista, const char* suspeito) {
+    // Verificar se o suspeito existe, senão criar
+    inserirSuspeito(hash, suspeito);
+    incrementarContadorSuspeito(hash, suspeito);
+    
+    // Criar nova relação
+    RelacaoPistaSuspeito* novaRelacao = (RelacaoPistaSuspeito*)malloc(sizeof(RelacaoPistaSuspeito));
+    if (novaRelacao == NULL) {
+        printf("Erro ao alocar memória para relação!\n");
+        exit(1);
+    }
+    
+    strcpy(novaRelacao->pista, pista);
+    strcpy(novaRelacao->suspeito, suspeito);
+    novaRelacao->proximo = hash->relacoes;
+    hash->relacoes = novaRelacao;
+}
+
+// Função para listar todas as associações pista-suspeito
+void listarAssociacoes(TabelaHash* hash) {
+    printf("\n==============================================\n");
+    printf("🔍 ANÁLISE DE PISTAS E SUSPEITOS\n");
+    printf("==============================================\n");
+    
+    if (hash->relacoes == NULL) {
+        printf("Nenhuma relação encontrada.\n");
+        return;
+    }
+    
+    RelacaoPistaSuspeito* relacao = hash->relacoes;
+    while (relacao != NULL) {
+        printf("  • %s\n", relacao->pista);
+        printf("    ➜ Suspeito: %s\n\n", relacao->suspeito);
+        relacao = relacao->proximo;
+    }
+    
+    printf("==============================================\n");
+}
+
+// Função para encontrar o suspeito mais citado
+void encontrarSuspeitoMaisCitado(TabelaHash* hash) {
+    char suspeitoMaisCitado[50] = "";
+    int maxPistas = 0;
+    
+    // Percorrer toda a tabela hash
+    for (int i = 0; i < TAMANHO_HASH; i++) {
+        Suspeito* atual = hash->tabela[i];
+        while (atual != NULL) {
+            if (atual->contadorPistas > maxPistas) {
+                maxPistas = atual->contadorPistas;
+                strcpy(suspeitoMaisCitado, atual->nome);
+            }
+            atual = atual->proximo;
+        }
+    }
+    
+    printf("\n==============================================\n");
+    printf("🎯 CONCLUSÃO DA INVESTIGAÇÃO\n");
+    printf("==============================================\n");
+    
+    if (maxPistas == 0) {
+        printf("Nenhum suspeito foi identificado nas pistas.\n");
+    } else {
+        printf("\n📊 Ranking dos suspeitos:\n\n");
+        
+        // Listar todos os suspeitos com suas contagens
+        for (int i = 0; i < TAMANHO_HASH; i++) {
+            Suspeito* atual = hash->tabela[i];
+            while (atual != NULL) {
+                printf("  • %s: %d pista(s)\n", atual->nome, atual->contadorPistas);
+                atual = atual->proximo;
+            }
+        }
+        
+        printf("\n🔎 SUSPEITO MAIS PROVÁVEL: %s\n", suspeitoMaisCitado);
+        printf("   (Relacionado a %d pista(s))\n", maxPistas);
+    }
+    
+    printf("==============================================\n");
+}
+
+// Função para liberar memória da tabela hash
+void liberarHash(TabelaHash* hash) {
+    if (hash == NULL) return;
+    
+    // Liberar relações
+    RelacaoPistaSuspeito* relacao = hash->relacoes;
+    while (relacao != NULL) {
+        RelacaoPistaSuspeito* temp = relacao;
+        relacao = relacao->proximo;
+        free(temp);
+    }
+    
+    // Liberar suspeitos
+    for (int i = 0; i < TAMANHO_HASH; i++) {
+        Suspeito* atual = hash->tabela[i];
+        while (atual != NULL) {
+            Suspeito* temp = atual;
+            atual = atual->proximo;
+            free(temp);
+        }
+    }
+    
+    free(hash);
+}
+
+// Função para inicializar as relações entre pistas e suspeitos
+void inicializarRelacoesPistas(TabelaHash* hash) {
+    // Definindo os suspeitos do crime
+    inserirRelacaoPistaSuspeito(hash, "Livro com pagina rasgada", "Professor Marcus");
+    inserirRelacaoPistaSuspeito(hash, "Carta antiga amarelada", "Lady Blackwood");
+    inserirRelacaoPistaSuspeito(hash, "Documento assinado", "Senhor Whitmore");
+    inserirRelacaoPistaSuspeito(hash, "Joia valiosa escondida", "Lady Blackwood");
+    inserirRelacaoPistaSuspeito(hash, "Faca com manchas", "Chef Antoine");
+    inserirRelacaoPistaSuspeito(hash, "Frasco de veneno", "Doutor Hayes");
+    inserirRelacaoPistaSuspeito(hash, "Taca quebrada", "Senhor Whitmore");
+    inserirRelacaoPistaSuspeito(hash, "Garrafa de vinho aberta", "Chef Antoine");
+}
 
 // ============================================================================
 // FUNÇÃO PRINCIPAL
@@ -284,6 +498,10 @@ int main() {
     // Inicializar árvore de pistas (BST)
     Pista* pistasColetadas = NULL;
     
+    // Inicializar tabela hash para suspeitos
+    TabelaHash* tabelaSuspeitos = inicializarHash();
+    inicializarRelacoesPistas(tabelaSuspeitos);
+    
     // Iniciar a exploração com coleta de pistas
     explorarSalas(hall, &pistasColetadas);
     
@@ -299,9 +517,16 @@ int main() {
     }
     printf("==============================================\n");
     
+    // Analisar as relações entre pistas e suspeitos
+    if (pistasColetadas != NULL) {
+        listarAssociacoes(tabelaSuspeitos);
+        encontrarSuspeitoMaisCitado(tabelaSuspeitos);
+    }
+    
     // Liberar memória
     liberarArvore(hall);
     liberarPistas(pistasColetadas);
+    liberarHash(tabelaSuspeitos);
     
     printf("\n==============================================\n");
     printf("Obrigado por jogar Detective Quest!\n");
